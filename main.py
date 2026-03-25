@@ -55,7 +55,24 @@ def main():
 
     # ── Step 3: Deduplicate ───────────────────────────────
     seen = load_seen_jobs()
+    is_first_run = len(seen) == 0
     logger.info(f"📚 Previously seen: {len(seen)} jobs")
+
+    if is_first_run:
+        # ── SEED MODE: first run — save all current jobs as "seen"
+        #    without posting them. Only truly NEW jobs from next run
+        #    onwards will be sent to Telegram.
+        logger.info("=" * 55)
+        logger.info("🌱 FIRST RUN — Seed mode activated!")
+        logger.info(f"   Marking {len(filtered)} existing jobs as seen...")
+        logger.info("   NO messages will be sent this run.")
+        logger.info("   Next run will only post NEW jobs.")
+        logger.info("=" * 55)
+        for job in filtered:
+            seen.add(job.dedup_key)
+        save_seen_jobs(seen)
+        logger.info(f"✅ Seeded {len(seen)} jobs. Next run will post only new ones!")
+        return
 
     new_jobs = filter_new_jobs(filtered, seen)
     logger.info(f"🆕 New jobs to post: {len(new_jobs)}")
