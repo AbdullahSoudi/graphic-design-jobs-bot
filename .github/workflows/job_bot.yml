@@ -1,0 +1,61 @@
+name: 🎨 Graphic Design Jobs Bot
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fetch-and-post:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 📦 Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: 📂 Restore seen jobs cache
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin data --depth=1 2>/dev/null || true
+          if git show origin/data:seen_jobs.json > seen_jobs.json 2>/dev/null; then
+            echo "✅ Restored seen_jobs.json ($(wc -c < seen_jobs.json) bytes)"
+          else
+            echo "📝 No previous state found, starting fresh"
+            echo "[]" > seen_jobs.json
+          fi
+
+      - name: 🚀 Run bot
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
+          SEEN_JOBS_FILE: seen_jobs.json
+        run: python main.py
+
+      - name: 💾 Save seen jobs cache
+        run: |
+          git stash --include-untracked 2>/dev/null || true
+          if ! git show-ref --verify --quiet refs/remotes/origin/data; then
+            git checkout --orphan data
+            git rm -rf . 2>/dev/null || true
+          else
+            git checkout data 2>/dev/null || git checkout -b data origin/data
+          fi
+          git stash pop 2>/dev/null || true
+          cp seen_jobs.json . 2>/dev/null || true
+          git add seen_jobs.json
+          git diff --cached --quiet || git commit -m "Update seen_jobs.json [skip ci]"
+          git push origin data 2>/dev/null || true
+          echo "✅ State saved to data branch"
